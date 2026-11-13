@@ -207,6 +207,8 @@ go_test(
     name = "pgalloc_test",
     size = "small",
     srcs = [
+        "memory_file_bench_test.go",
+        "memory_file_test.go",
         "pgalloc_64k_test.go",
         "pgalloc_test.go",
         "save_restore_test.go",

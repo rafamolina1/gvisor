@@ -143,6 +143,33 @@ func TestHostFileDataSeeker(t *testing.T) {
 	}
 }
 
+func TestSaveRestoreEmptyMemoryFile(t *testing.T) {
+	for _, diskBacked := range []bool{false, true} {
+		t.Run(fmt.Sprintf("diskBacked=%t", diskBacked), func(t *testing.T) {
+			var dir string
+			if diskBacked {
+				dir = t.TempDir()
+			}
+			f := newSaveTestMemoryFile(t, dir, diskBacked)
+			var checkpoint bytes.Buffer
+			if err := f.SaveTo(context.Background(), &checkpoint, &SaveOpts{}); err != nil {
+				t.Fatal(err)
+			}
+			restored := newSaveTestMemoryFile(t, dir, diskBacked)
+			if err := restored.LoadFrom(context.Background(), &checkpoint, &LoadOpts{}); err != nil {
+				t.Fatal(err)
+			}
+			st, err := restored.file.Stat()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if st.Size() != 0 || len(restored.chunksLoad()) != 0 {
+				t.Fatalf("empty restore: size=%d, chunks=%d", st.Size(), len(restored.chunksLoad()))
+			}
+		})
+	}
+}
+
 func TestSaveToPreservesContents(t *testing.T) {
 	for _, tc := range []struct {
 		name          string

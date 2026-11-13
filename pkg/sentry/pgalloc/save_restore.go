@@ -1169,8 +1169,8 @@ func (f *MemoryFile) LoadFrom(ctx context.Context, r io.Reader, opts *LoadOpts) 
 	log.Infof("MemoryFile(%p): loaded metadata in %s", f, time.Duration(gohacks.Nanotime()-timeMetadataStart))
 
 	fileSize := uint64(len(chunks)) * chunkSize
-	if err := f.file.Truncate(int64(fileSize)); err != nil {
-		return fmt.Errorf("failed to truncate MemoryFile: %w", err)
+	if err := f.growFile(fileSize); err != nil {
+		return fmt.Errorf("failed to grow MemoryFile: %w", err)
 	}
 	// Obtain chunk mappings, then madvise them concurrently with loading data.
 	var (

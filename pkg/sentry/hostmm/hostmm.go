@@ -125,8 +125,10 @@ func NotifyCurrentMemcgPressureCallback(f func(), level string) (func(), error) 
 }
 
 // IMAWorkAroundForMemFile works around IMA by immediately creating a temporary
-// PROT_EXEC mapping, while the backing file is still small. IMA will ignore
-// any future mappings.
+// PROT_EXEC mapping, while the backing file is still small. Later mappings can
+// reuse the cached IMA state as long as no operation invalidates it. In
+// particular, truncating the file can invalidate the cache even if its size
+// does not change.
 //
 // The Linux kernel contains an optional feature called "Integrity
 // Measurement Architecture" (IMA). If IMA is enabled, it will checksum

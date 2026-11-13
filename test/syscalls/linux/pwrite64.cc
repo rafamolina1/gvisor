@@ -15,7 +15,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/unistd.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -23,6 +25,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -147,6 +150,35 @@ TEST_F(Pwrite64, DoesNotChangeOffset) {
   // Offset should remain unchanged.
   EXPECT_THAT(lseek(fd.get(), 0, SEEK_CUR),
               SyscallSucceedsWithValue(initial_offset));
+}
+
+TEST_F(Pwrite64, SparseGrowth) {
+  const FileDescriptor fd =
+      ASSERT_NO_ERRNO_AND_VALUE(Open(name_.c_str(), O_RDWR));
+  const char contents[] = "preserved contents";
+  ASSERT_THAT(pwrite64(fd.get(), contents, sizeof(contents), 0),
+              SyscallSucceedsWithValue(sizeof(contents)));
+  const size_t page = getpagesize();
+  for (const off_t size : {2 * page, 4 * page}) {
+    const char zero = 0;
+    ASSERT_THAT(pwrite64(fd.get(), &zero, 1, size - 1),
+                SyscallSucceedsWithValue(1));
+    struct stat st;
+    ASSERT_THAT(fstat(fd.get(), &st), SyscallSucceeds());
+    EXPECT_EQ(st.st_size, size);
+    char actual[sizeof(contents)];
+    ASSERT_THAT(pread64(fd.get(), actual, sizeof(actual), 0),
+                SyscallSucceedsWithValue(sizeof(actual)));
+    EXPECT_EQ(memcmp(actual, contents, sizeof(contents)), 0);
+    void* const mapping = mmap(nullptr, page, PROT_READ | PROT_WRITE,
+                               MAP_SHARED, fd.get(), size - page);
+    ASSERT_NE(mapping, MAP_FAILED);
+    const auto unmap =
+        Cleanup([&] { EXPECT_THAT(munmap(mapping, page), SyscallSucceeds()); });
+    const auto* bytes = static_cast<const char*>(mapping);
+    EXPECT_TRUE(
+        std::all_of(bytes, bytes + page, [](char b) { return b == 0; }));
+  }
 }
 
 // Test that pwrite64 to a pipe fails with ESPIPE.

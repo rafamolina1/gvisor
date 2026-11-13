@@ -440,9 +440,16 @@ func NewMemoryFile(file *os.File, opts MemoryFileOpts) (*MemoryFile, error) {
 		return nil, fmt.Errorf("invalid MemoryFileOpts.DelayedEviction: %v", opts.DelayedEviction)
 	}
 
-	// Truncate the file to 0 bytes first to ensure that it's empty.
-	if err := file.Truncate(0); err != nil {
+	// Do not truncate an empty file: its IMA state may have been prepared
+	// before the file was passed to the Sentry.
+	stat, err := file.Stat()
+	if err != nil {
 		return nil, err
+	}
+	if stat.Size() != 0 {
+		if err := file.Truncate(0); err != nil {
+			return nil, err
+		}
 	}
 	f := &MemoryFile{
 		opts: opts,
@@ -946,7 +953,7 @@ func (f *MemoryFile) extendChunksLocked(alloc *allocState) error {
 	// In tests, f.file may be nil.
 	var mapStart uintptr
 	if f.file != nil {
-		if err := f.file.Truncate(int64(newFileSize)); err != nil {
+		if err := f.growFile(newFileSize); err != nil {
 			return err
 		}
 		m, _, errno := unix.Syscall6(
@@ -983,6 +990,26 @@ func (f *MemoryFile) extendChunksLocked(alloc *allocState) error {
 		End:   newNrChunks * chunkSize,
 	})
 
+	return nil
+}
+
+// growFile extends the backing file without invalidating its cached IMA state.
+// size must be zero or a multiple of chunkSize. For nonzero size, the last
+// chunk must not contain valid data.
+func (f *MemoryFile) growFile(size uint64) error {
+	if size == 0 {
+		return nil
+	}
+	if _, err := f.file.WriteAt([]byte{0}, int64(size-1)); err != nil {
+		return err
+	}
+	// The write can allocate a huge page. Try to release the whole new tail
+	// chunk. As with ordinary decommit, unsupported host filesystems can retain
+	// the zeroed pages without preventing allocation.
+	fr := memmap.FileRange{Start: size - chunkSize, End: size}
+	if err := f.decommitFile(fr); err != nil {
+		log.Warningf("Failed to decommit new MemoryFile tail %v: %v", fr, err)
+	}
 	return nil
 }
 
