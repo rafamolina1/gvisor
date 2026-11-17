@@ -168,3 +168,15 @@ doc(
     permalink = "/docs/user_guide/no_root_container/",
     weight = "95",
 )
+
+doc(
+    name = "demos",
+    src = "demos.md",
+    category = "User Guide",
+    data = [
+        "demos-checkpoint.svg",
+        "demos-startup.svg",
+    ],
+    permalink = "/docs/user_guide/demos/",
+    weight = "15",
+)

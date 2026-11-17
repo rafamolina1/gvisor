@@ -163,6 +163,7 @@ docs(
         "//g3doc/user_guide:checkpoint_restore",
         "//g3doc/user_guide:compatibility",
         "//g3doc/user_guide:debugging",
+        "//g3doc/user_guide:demos",
         "//g3doc/user_guide:filesystem",
         "//g3doc/user_guide:fs_snapshot",
         "//g3doc/user_guide:fuse",
